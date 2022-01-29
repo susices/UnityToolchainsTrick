@@ -30,7 +30,7 @@ namespace CZToolKit.Examples
                 nums.Add(i);
             }
 
-            for (int i = 0; i < 100; i++)
+            for (int i = 0; i < 1000; i++)
             {
                 objects.Add(null);
             }

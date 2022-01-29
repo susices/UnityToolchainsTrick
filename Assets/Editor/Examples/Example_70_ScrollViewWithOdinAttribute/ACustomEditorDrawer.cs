@@ -5,15 +5,9 @@ using UnityEngine;
 
 namespace ToolKits
 {
-    public abstract class ACustomEditorDrawer<T>: ICustomEditorDrawer
+    public abstract class ACustomEditorDrawer
     {
-        public abstract void OnGui(Rect rect, T obj);
-        
-    }
-
-    public interface ICustomEditorDrawer
-    {
-        
+        public abstract void OnGui(Rect rect,object obj, CustomDrawerObject customDrawerObject);
     }
 }
 

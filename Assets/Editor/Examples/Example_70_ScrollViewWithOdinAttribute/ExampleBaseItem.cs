@@ -4,13 +4,9 @@ using UnityEngine;
 
 namespace ToolKits
 {
-    public class ExampleItem
+    public abstract class ExampleBaseItem
     {
-        public string A;
-
-        public int B;
-
-        public float C;
+        
     }
 }
 

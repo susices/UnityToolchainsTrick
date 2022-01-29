@@ -3,179 +3,183 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using AllTrickOverView.Core;
+using Sirenix.OdinInspector;
+using Sirenix.Serialization;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Events;
 
 namespace ToolKits
 {
     public static class CustomEditorDrawHelper
     {
-        private static Dictionary<Type, ICustomEditorDrawer> CustomEditorDrawerMap;
+        private static Dictionary<Type, ACustomEditorDrawer> CustomEditorDrawerMap = null;
 
-        public static ICustomEditorDrawer GetCustomEditorDrawer<T>()
+        public static ACustomEditorDrawer GetCustomEditorDrawer(Type drawType)
         {
             if (CustomEditorDrawerMap==null)
             {
-                CustomEditorDrawerMap = new Dictionary<Type, ICustomEditorDrawer>();
+                CustomEditorDrawerMap = new Dictionary<Type, ACustomEditorDrawer>();
                 Assembly assembly = Assembly.GetAssembly(typeof(CustomEditorDrawHelper));
                 Type[] types = assembly.GetTypes();
 
                 foreach (var type in types)
                 {
-                    object[] objects = type.GetCustomAttributes(typeof(CustomPreviewAttribute), true);
+                    object[] objects = type.GetCustomAttributes(typeof(CustomEditorDrawerAttribute), true);
                     if (objects.Length==0 || type.IsAbstract)
                     {
                         continue;
                     }
-                    
-                    ICustomEditorDrawer Idrawer = Activator.CreateInstance(type) as ICustomEditorDrawer;
-                    CustomEditorDrawerMap.Add(type, Idrawer);
+
+                    var attr = objects[0] as CustomEditorDrawerAttribute;
+                    if (attr==null)
+                    {
+                        Debug.LogError($"get CustomEditorDrawerAttribute failed!");
+                        continue;
+                    }
+
+                    ACustomEditorDrawer aDrawer = Activator.CreateInstance(type) as ACustomEditorDrawer;
+                    if (aDrawer == null)
+                    {
+                        Debug.LogError($"{type} is not ACustomEditorDrawer");
+                        continue;
+                    }
+                    CustomEditorDrawerMap.Add(attr.DrawType, aDrawer);
                 }
             }
 
-            if (CustomEditorDrawerMap.TryGetValue(typeof(T), out var drawer))
+            if (CustomEditorDrawerMap.TryGetValue(drawType, out var drawer))
             {
                 return drawer;
             }
             return null;
         }
-    }
-    
-    
-    public class TestListView : EditorWindow
-    {
-        [MenuItem("Test/Old")]
-        private static void Init()
+
+        public static void DrawCustomEditor(Rect rect,object obj, CustomDrawerObject customDrawerObject)
         {
-            GetWindow<TestListView>();
-        }
-
-        private const int s_RowCount = 400;
-        private const int s_ColCount = 30;
-
-        private float m_RowHeight = 18f;
-        private float m_ColWidth = 52f;
-        private Vector2 m_ScrollPosition;
-
-        void OnGUI()
-        {
-            OnDrawListView();
-        }
-
-        private void OnDrawListView()
-        {
-            m_ScrollPosition = EditorGUILayout.BeginScrollView(m_ScrollPosition);
-            for (int i = 0; i < s_RowCount; i++)
-            {
-                EditorGUILayout.BeginHorizontal();
-                for (int j = 0; j < s_ColCount; j++)
-                {
-                    EditorGUILayout.LabelField((i * 100 + j).ToString(), GUILayout.Width(m_ColWidth));
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-            EditorGUILayout.EndScrollView();
+            GetCustomEditorDrawer(obj.GetType()).OnGui(rect, obj, customDrawerObject);
         }
     }
-
-
-    public class NewTestListView : EditorWindow
+    
+    public class AbstractListView : EditorWindow
 {
     [MenuItem("Test/New")]
     private static void Init()
     {
-        GetWindow<NewTestListView>();
+        GetWindow<AbstractListView>();
     }
 
-    private const int s_RowCount = 400;
-    private const int s_ColCount = 30;
+    
+    private List<ExampleBaseItem> itemList;
+    public SerializedObject _serializedObject;
+    public CustomDrawerObject itemListDrawerObject;
 
-    private float m_RowHeight = 18f;
-    private float m_ColWidth = 52f;
-    private Vector2 m_ScrollPosition;
-
-    void OnGUI()
+    private void OnEnable()
     {
-        OnDrawListView2();
-    }
-
-    private void OnDrawListView2()
-    {
-        Rect totalRect = new Rect(0, 0, position.width, position.height);
-        Rect contentRect = new Rect(0, 0, s_ColCount * m_ColWidth, s_RowCount * m_RowHeight);
-        m_ScrollPosition = GUI.BeginScrollView(totalRect, m_ScrollPosition, contentRect);
-
-        int num;
-        int num2;
-        GetFirstAndLastRowVisible(out num, out num2, totalRect.height);
-        if (num2 >= 0)
+        if (itemListDrawerObject==null)
         {
-            int numVisibleRows = num2 - num + 1;
-            IterateVisibleItems(num, numVisibleRows, contentRect.width, totalRect.height);
-        }
-
-        GUI.EndScrollView(true);
-    }
-
-    /// <summary>
-    /// 获取可显示的起始行和结束行
-    /// </summary>
-    /// <param name="firstRowVisible">起始行</param>
-    /// <param name="lastRowVisible">结束行</param>
-    /// <param name="viewHeight">视图高度</param>
-    private void GetFirstAndLastRowVisible(out int firstRowVisible, out int lastRowVisible, float viewHeight)
-    {
-        if (s_RowCount == 0)
-        {
-            firstRowVisible = lastRowVisible = -1;
+            
+            if (itemList==null)
+            {
+                itemList = new List<ExampleBaseItem>();
+                for (int i = 0; i < 1000; i++)
+                {
+                    itemList.Add(new ExampleItemA());
+                    itemList.Add(new ExampleItemB());
+                }
+            }
+            itemListDrawerObject = CustomDrawerObject.Create(itemList);
         }
         else
         {
-            float y = m_ScrollPosition.y;
-            float height = viewHeight;
-            firstRowVisible = (int)Mathf.Floor(y / m_RowHeight);
-            lastRowVisible = firstRowVisible + (int)Mathf.Ceil(height / m_RowHeight);
-            firstRowVisible = Mathf.Max(firstRowVisible, 0);
-            lastRowVisible = Mathf.Min(lastRowVisible, s_RowCount - 1);
-            if (firstRowVisible >= s_RowCount && firstRowVisible > 0)
-            {
-                m_ScrollPosition.y = 0f;
-                GetFirstAndLastRowVisible(out firstRowVisible, out lastRowVisible, viewHeight);
-            }
+            itemList = itemListDrawerObject.Value as List<ExampleBaseItem>;
         }
+        
+        itemListDrawerObject.GetContextData<ScrollListContextData>().OnScrollItemRightClick+=(OnScrollListRightClick);
     }
 
-    /// <summary>
-    /// 迭代绘制可显示的项
-    /// </summary>
-    /// <param name="firstRow">起始行</param>
-    /// <param name="numVisibleRows">总可显示行数</param>
-    /// <param name="rowWidth">每行的宽度</param>
-    /// <param name="viewHeight">视图高度</param>
-    private void IterateVisibleItems(int firstRow, int numVisibleRows, float rowWidth, float viewHeight)
+    void OnGUI()
     {
-        int i = 0;
-        while (i < numVisibleRows)
-        {
-            int num2 = firstRow + i;
-            Rect rowRect = new Rect(0f, (float)num2 * m_RowHeight, rowWidth, m_RowHeight);
-            float num3 = rowRect.y - m_ScrollPosition.y;
-            if (num3 <= viewHeight)
-            {
-                Rect colRect = new Rect(rowRect);
-                colRect.width = m_ColWidth;
+        
+        Rect rect = EditorGUILayout.GetControlRect(false, 500, GUILayout.Width(500));
+        ListScrollViewDrawHelper.DrawScrollList(rect, 18,480, itemListDrawerObject);
+    }
 
-                for (int j = 0; j < s_ColCount; j++)
-                {
-                    EditorGUI.LabelField(colRect, (num2 * 100 + j).ToString());
-                    colRect.x += colRect.width;
-                }
-            }
-            i++;
+    private void OnScrollListRightClick(int index)
+    {
+        var list = itemListDrawerObject.Value as List<ExampleBaseItem>;
+        if (list==null)
+        {
+            return;
         }
+        var genericMenu = new GenericMenu();
+        genericMenu.AddItem(new GUIContent("删除"), false, () =>
+        {   
+            list.RemoveAt(index);
+        });
+        genericMenu.AddItem(new GUIContent("插入"), false, () =>
+        {   
+            list.Insert(index, new ExampleItemA());
+        });
+        genericMenu.AddItem(new GUIContent("功能合集/功能2"), false, () => { Debug.Log("功能2"); });
+        genericMenu.AddItem(new GUIContent("功能合集/功能3"), false, () => { Debug.Log("功能3"); });
+        genericMenu.AddSeparator("功能合集/");
+        genericMenu.AddItem(new GUIContent("功能合集/功能4"), false, () => { Debug.Log("功能4"); });
+        genericMenu.ShowAsContext();
     }
 }
     
+    public class CustomDrawerObject : SerializedScriptableObject
+    {
+        public object Value;
+        private Dictionary<Type, object> m_contextData = new Dictionary<Type, object>();
+        
+        public static CustomDrawerObject Create (object obj)
+        {
+            var drawerObject = CreateInstance<CustomDrawerObject>();
+            drawerObject.Value = obj;
+            return drawerObject;
+        }
+
+        public static void Initialize(object rowObject, CustomDrawerObject customDrawerObject)
+        {
+            if (customDrawerObject==null)
+            {
+                customDrawerObject = CreateInstance<CustomDrawerObject>();
+                customDrawerObject.Value = rowObject;
+            }
+            else
+            {
+                rowObject = customDrawerObject.Value;
+            }
+        }
+
+        public T GetContextData<T>() where T : SerializedScriptableObject
+        {
+            object contextData;
+            if (m_contextData.TryGetValue(typeof(T), out contextData))
+            {
+                return contextData as T;
+            }
+            
+            contextData = CreateInstance<T>();
+            m_contextData.Add(typeof(T), contextData);
+            return contextData as T;
+        }
+    }
+    
+    public class ScrollListContextData : SerializedScriptableObject
+    {
+        public Vector2 ScrollPosition;
+
+        public bool HasClick = false;
+        public Vector2 ClickedMousePos;
+
+        public Action<int> OnScrollItemLeftClick;
+
+        public Action<int> OnScrollItemRightClick;
+    }
 }
 
 

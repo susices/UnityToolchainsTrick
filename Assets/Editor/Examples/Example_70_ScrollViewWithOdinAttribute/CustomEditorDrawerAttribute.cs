@@ -8,9 +8,10 @@ namespace ToolKits
     [AttributeUsage(AttributeTargets.Class)]
     public class CustomEditorDrawerAttribute : Attribute
     {
-        public CustomEditorDrawerAttribute()
+        public Type DrawType;
+        public CustomEditorDrawerAttribute(Type type)
         {
-            
+            DrawType = type;
         }
     }
 }
